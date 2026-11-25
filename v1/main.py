@@ -1,5 +1,6 @@
 import glob
 import json
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,7 +13,9 @@ from pydantic import BaseModel
 
 load_dotenv(override=True)
 
-MODEL = "gpt-4.1-nano"
+logger = logging.getLogger("uvicorn.error")
+
+MODEL = "gpt-4.1-mini"
 openai_client = OpenAI()
 
 SYSTEM_PREFIX = """
@@ -34,6 +37,14 @@ def load_knowledge() -> None:
         with open(filename, "r", encoding="utf-8") as f:
             knowledge[name.lower()] = f.read()
     for filename in glob.glob("../knowledge-base/products/*"):
+        name = Path(filename).stem
+        with open(filename, "r", encoding="utf-8") as f:
+            knowledge[name.lower()] = f.read()
+    for filename in glob.glob("../knowledge-base/contracts/*"):
+        name = Path(filename).stem
+        with open(filename, "r", encoding="utf-8") as f:
+            knowledge[name.lower()] = f.read()
+    for filename in glob.glob("../knowledge-base/company/*"):
         name = Path(filename).stem
         with open(filename, "r", encoding="utf-8") as f:
             knowledge[name.lower()] = f.read()
@@ -114,11 +125,18 @@ def chat(request: ChatRequest):
 
 def stream_chat_events(request: ChatRequest):
     messages = build_messages(request)
-    stream = openai_client.chat.completions.create(model=MODEL, messages=messages, stream=True)
-    for chunk in stream:
-        delta = chunk.choices[0].delta.content
-        if delta:
-            yield f"data: {json.dumps({'content': delta})}\n\n"
+    try:
+        stream = openai_client.chat.completions.create(model=MODEL, messages=messages, stream=True)
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield f"data: {json.dumps({'content': delta})}\n\n"
+    except Exception as e:
+        # The 200 status is already sent once streaming starts, so report the error in-stream
+        logger.exception("Error while streaming chat completion")
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
     yield "data: [DONE]\n\n"
 
 

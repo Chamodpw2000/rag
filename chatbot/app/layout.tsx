@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={poppins.variable}>
-      <body><div className="p-4">{children}</div></body>
+      <body className="h-dvh"><div className="h-full p-4 overflow-y-auto">{children}</div></body>
     </html>
   );
 }
